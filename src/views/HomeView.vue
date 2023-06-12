@@ -48,7 +48,6 @@ watch(
     justify-content: end;
 
     .m-header {
-      padding: 0 40px;
       box-sizing: border-box;
       flex-shrink: 0;
       position: fixed;

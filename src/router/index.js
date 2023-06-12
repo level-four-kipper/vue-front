@@ -19,6 +19,24 @@ const routes = [
         component: () => import('@/views/home/Index.vue'),
         meta: {
           title: '首页',
+          navIndex: 0,
+        },
+      },
+      {
+        path: 'introduce',
+        name: 'introduce',
+        component: () => import('@/views/introduce.vue'),
+        meta: {
+          title: '公司介绍',
+          navIndex: 0,
+        },
+      },
+      {
+        path: 'example',
+        name: 'example',
+        component: () => import('@/views/example.vue'),
+        meta: {
+          title: '成功案例',
           navIndex: 0, // header 导航下标
         },
       },

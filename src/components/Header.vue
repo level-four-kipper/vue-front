@@ -6,90 +6,37 @@
       </router-link>
     </slot>
 
-    <div class="header-center">
-      <slot name="left" v-if="!route.meta.hideLeft">
-        <div class="module-list">
-          <div v-for="(item, index) in navList" :key="index" class="index" @click="handleNavClick(index, item)">
-            <span :class="{ active: index === currentIndex }">{{ item.lable }}</span>
-          </div>
-        </div>
-      </slot>
-    </div>
-
-    <div class="content-middle">
-      <slot name="right" v-if="!route.meta.hideRight">
-        <div class="search" :class="{ hidden: route.meta.hideSearch }">
-          <input type="text" placeholder="输入关键字搜索" v-model="searchValue" @keyup.enter="jumpSearch" />
-          <img src="@/assets/img/index/g-search.png" @click="jumpSearch" />
-        </div>
-        <el-dropdown @command="creationClick" class="creation-popper">
-          <span class="el-dropdown-link">
-            <el-button class="creation-btn" type="primary">创作</el-button>
+    <div class="content-menu">
+      <div class="menu-list">
+        <div class="menu-item-container" v-for="(item, index) in menuList" :key="index" @mouseenter="handleHover(-1)">
+          <span class="menu-item" :class="{ active: index === activeIndex }" @mouseenter="handleHover(index)" @click="jumpPage(item)">
+            {{ item.title }}
           </span>
-          <template #dropdown>
-            <el-dropdown-menu class="creation-list">
-              <el-dropdown-item command="/publishBlog">写博客</el-dropdown-item>
-              <el-dropdown-item command="/publishQuestion">提问题</el-dropdown-item>
-              <el-dropdown-item class="border-top" command="/creationList/board">创作空间</el-dropdown-item>
-            </el-dropdown-menu>
-          </template>
-        </el-dropdown>
-      </slot>
-    </div>
-
-    <!-- 消息 -->
-    <el-dropdown class="notice" trigger="hover">
-      <div class="notice__icon">
-        <img src="@/assets/img/index/g-msg.png" />
-        <span :class="{ 'is-dot': getIcon(noticeTotal) === 'dot' }" class="notice__number">{{ getIcon(noticeTotal) }}</span>
+        </div>
       </div>
-      <template #dropdown>
-        <el-dropdown-menu>
-          <el-dropdown-item v-for="(item, idx) in notificationType" :key="idx" :divided="idx" @click="toViewNotice(idx + 1)">
-            <div class="dropdown-span">
-              <span class="notice__item">
-                {{ item }}
-                <span v-if="idx !== 6" :class="{ 'is-dot': getIcon(notificationInfo[idx]?.num || 0) === 'dot' }">{{ getIcon(notificationInfo[idx]?.num || 0) }}</span>
-              </span>
-            </div>
-          </el-dropdown-item>
-        </el-dropdown-menu>
-      </template>
-    </el-dropdown>
+    </div>
+  </div>
 
-    <!-- 头像 -->
-    <el-dropdown trigger="hover" class="person">
-      <img class="avatar__image" :src="avatar" alt="头像" />
-      <template #dropdown>
-        <el-dropdown-menu v-if="token">
-          <el-dropdown-item>
-            <router-link to @click="jumpPage(`/workbench`)">
-              <span class="dropdown-span" to="/control-list">我的账户</span>
-            </router-link>
-          </el-dropdown-item>
-          <el-dropdown-item divided>
-            <router-link to @click="jumpPage(`/personalIndex`)">
-              <span class="dropdown-span">个人空间</span>
-            </router-link>
-          </el-dropdown-item>
-          <!-- <el-dropdown-item divided v-if="role === '1'">
-                        <router-link to="/controlPanel">
-                            <span class="dropdown-span">控制台</span>
-                        </router-link>
-          </el-dropdown-item>-->
-          <el-dropdown-item divided>
-            <router-link to @click="jumpFeedback">
-              <span class="dropdown-span">用户反馈</span>
-            </router-link>
-          </el-dropdown-item>
-          <el-dropdown-item divided>
-            <router-link to @click="toLogin">
-              <span class="dropdown-span">退 出</span>
-            </router-link>
-          </el-dropdown-item>
-        </el-dropdown-menu>
-      </template>
-    </el-dropdown>
+  <div v-if="hoverIndex !== -1 && menuList[hoverIndex].child" class="menu-child-list" @mouseleave="handleHover(-1)">
+    <span
+      class="menu-item"
+      :class="{ active: index === activeChildIndex }"
+      v-for="(i, key) in menuList[hoverIndex].child"
+      :key="key"
+      @click="jumpPage(i)">
+      {{ i.title }}
+    </span>
+  </div>
+
+  <!-- 轮播 -->
+  <div header="header-container">
+    <div class="header-banner">
+      <el-carousel height="400px" indicator-position="none" interval="5000">
+        <el-carousel-item v-for="item in bannerList" :key="item">
+          <img class="banner-img" :src="item" alt="" />
+        </el-carousel-item>
+      </el-carousel>
+    </div>
   </div>
 </template>
 
@@ -97,112 +44,61 @@
 import { useCommonStore } from '@/stores/common.js'
 import { useLoginStore } from '@/stores/login.js'
 import { websocketMix } from '@/views/messageCenter/websocket.js'
+import { watch } from '@vue/runtime-core'
+import { useRoute } from 'vue-router'
 
-const commonStore = useCommonStore()
-const loginStore = useLoginStore()
-const { token, avatar } = storeToRefs(loginStore)
-const searchValue = ref('')
-
-// 消息
-const notificationType = ['点赞', '评论', '收藏', '关注', '@我', '系统'] // , '消息设置'
-const notificationInfo = ref([])
-const { initWebSocket, disconnect } = websocketMix(notificationInfo)
-const noticeTotal = computed(() => {
-  return notificationInfo.value.reduce((total, currentValue) => {
-    return total + currentValue?.num || 0
-  }, 0)
-})
-
-// 消息为1时显示为红色点，其余显示为数字
-// a.N<1时，不显示
-// b.N=1时，显示为红点
-// c.N<100时，显示N
-// d.N<999时，显示为 “M+”，M为N的百位数
-// e.N>=999 时，显示为 “999+”
-function getIcon(number) {
-  if (number < 1) {
-    return ''
-  } else if (number == 1) {
-    return 'dot'
-  } else if (1 < number && number < 100) {
-    return 'N'
-  } else if (100 <= number && number < 999) {
-    return 'M+'
-  } else {
-    return '999+'
-  }
-}
-const currentIndex = ref(0)
-const notificationData = ref([])
-const newNotice = ref(false)
-let isShowControl = ref(false)
-const navList = [
-  { lable: '首页', path: '/home' },
-  { lable: '博客', path: '/blogIndex' },
-  { lable: '问答', path: '/quizIndex' },
-  { lable: '题库', path: '/questionBank/index' }
-  // { lable: '考试', path: '/exam' }
-  // {lable: '资料', route: '/'},
-]
-const handleNavClick = (index, item) => {
-  currentIndex.value = index
-  router.push({ path: item.path })
-}
-
-const jumpSearch = () => {
-  commonStore.updateSearchWord(searchValue.value)
-  searchValue.value = '' 
-  router.push('/search')
-}
-function jumpPage(path) {
-  const routeUrl = router.resolve({
-    path
-  })
-  window.open(routeUrl.href, '_blank')
-}
-
-const router = useRouter()
+const activeIndex = ref(0)
+const hoverIndex = ref(-1)
 const route = useRoute()
-
-watch(
-  route,
-  to => {
-    currentIndex.value = to.meta.navIndex
-  },
+const router = useRouter()
+const activeChildIndex = ref(0)
+const bannerList = ['/src/assets/img/index/banner.png', '/src/assets/img/index/banner.png', '/src/assets/img/index/banner.png']
+const menuList = [
+  { title: '首页', path: '/home' },
+  { title: '公司介绍', path: '/introduce' },
+  { title: '解决方案', path: '/solution' },
   {
-    immediate: true
-  }
-)
-const creationClick = path => {
-  jumpPage(path)
+    title: '成功案例',
+    path: '/example',
+    child: [
+      { title: '智能家居', path: '/example/smartHome' },
+      { title: '指挥系统', path: '/example/smartSystem' },
+      { title: '智慧旅游', path: '/example/smartTravel' },
+      { title: '智慧校园', path: '/example/smartSchool' },
+      { title: '智慧医院', path: '/example/smartHospital' },
+      { title: '智慧园区', path: '/example/smartPark' },
+      { title: '智慧小区', path: '/example/smartCommunity' },
+      { title: '智慧建筑', path: '/example/smartBuild' },
+    ],
+  },
+  { title: '联系我们' },
+]
+const handleHover = index => {
+  hoverIndex.value = index
 }
-function toViewNotice(idx) {
-  let tabIndex = idx
-  if (idx > notificationInfo.value.length) {
-    tabIndex = 1
-  }
-  router.push({ path: '/messageIndex', query: { tabIndex } })
+
+const jumpPage = item => {
+  router.push(item.path)
 }
-// 退出登录
-function toLogin() {
-  loginStore.loginOut()
-  disconnect()
-}
-// 钩子函数
-onMounted(() => {
-  initWebSocket()
-})
 </script>
 
 <style scoped lang="scss">
+.header-container {
+  padding: 0;
+}
+
 .header {
-  background-color: #ffffff;
+  width: 100%;
+  // position: absolute;
+  top: 0;
+  background-color: rgba(0, 0, 0, 0);
+  color: #000;
   box-shadow: 0 2px 10px 0 rgba(156, 172, 209, 0.3);
   height: 64px;
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 0 40px;
+  // border-bottom: 1px solid rgba(156, 172, 209, 0.3);
 
   .logo {
     height: 100%;
@@ -215,182 +111,60 @@ onMounted(() => {
     }
   }
 
-  .header-center {
-    flex: 1;
-    padding: 0;
-
-    .module-list {
-      display: flex;
-      min-width: 300px;
-      width: 368px;
-      height: 20px;
-      align-items: center;
-      margin-left: 40px;
-
-      .index {
-        display: inline-block;
-        margin-right: 20px;
-
-        span:hover {
-          color: #0175ff;
-        }
-
-        .active {
-          color: #0175ff;
-        }
-      }
-
-      span {
-        cursor: pointer;
-        padding: 0 10px;
-        font-family: PingFangSC-Regular;
-        font-size: 14px;
-        color: #4d4e54;
-        letter-spacing: 0;
-      }
-    }
-  }
-
-  .content-middle {
-    width: 380px;
+  .content-menu {
+    // width: 700px;
+    margin-right: 100px;
     display: flex;
     justify-content: space-between;
     align-items: center;
+    flex-direction: row;
 
-    .search {
-      width: 220px;
-      border: 1px solid #ccc;
-      border-radius: 30px;
-      padding: 0 18px;
-      height: 32px;
-      background-color: #fff;
+    .menu-list {
       display: flex;
+      height: 64px;
       align-items: center;
-      &.hidden {
-        visibility: hidden;
+      justify-content: space-between;
+      .menu-item-container {
+        height: 100%;
+        display: flex;
+        margin-right: 20px;
+        align-items: center;
       }
-
-      input {
-        border: none;
-        outline: none;
-
-        &::placeholder {
-          color: #999;
+      .menu-item {
+        font-weight: 600;
+        // height: 100%;
+        padding: 5px 10px;
+        &:hover,
+        &.active {
+          background-color: #4070f4;
+          border-radius: 4px;
+          cursor: pointer;
+          color: #fff;
         }
       }
-
-      img {
-        cursor: pointer;
-      }
-    }
-
-    .el-button {
-      display: flex;
-      cursor: pointer;
-      width: 60px;
-      height: 32px;
-      border-color: #0175ff;
-      border-radius: 2px;
-
-      &:hover {
-        opacity: 0.85;
-      }
-    }
-
-    .creation-btn {
-      background: #0175ff;
-    }
-
-    .ask {
-      margin-left: 10px;
-      background-color: white;
-      color: #0175ff;
     }
   }
 }
 
-.creation-list {
-  width: 88px;
-  height: 129px;
-  padding: 0;
-  background: #fff;
-
-  :deep(.el-dropdown-menu__item) {
-    width: 56px;
-    line-height: 20px;
-    padding: 16px 0 0;
-    margin: 0 auto 0;
-    justify-content: center;
-
-    &.border-top {
-      padding-top: 12px;
-      margin-top: 12px;
-      margin-bottom: 12px;
-      border-top: 1px solid #e3e3ed;
-      color: #0175ff;
-    }
-
+.menu-child-list {
+  height: 60px;
+  font-weight: 400;
+  line-height: 60px;
+  padding-right: 100px;
+  text-align: right;
+  position: absolute;
+  width: 100%;
+  background-color: #fff;
+  top: 64px;
+  box-shadow: 0 2px 10px 0 rgba(156, 172, 209, 0.3);
+  z-index: 20;
+  .menu-item {
+    margin-right: 20px;
     &:hover {
-      color: #0175ff;
-      opacity: 0.85;
-      background: transparent;
-    }
-  }
-}
-
-.notice {
-  position: relative;
-  margin: 0 34px;
-
-  .notice__icon {
-    img {
+      color: #4070f4;
+      border-radius: 4px;
       cursor: pointer;
     }
-
-    span {
-      color: #f56b89;
-      position: absolute;
-      top: -5px;
-    }
   }
-}
-
-.notice__item {
-  position: relative;
-
-  span {
-    position: absolute;
-    top: -1px;
-    left: 30px;
-    color: #f56b89;
-  }
-}
-
-.person {
-  .avatar__image {
-    width: 46px;
-    height: 46px;
-    border-radius: 46px;
-    cursor: pointer;
-    background-color: #fff;
-    border: 1px solid #d5d8e4;
-  }
-}
-
-.dropdown-span {
-  display: inline-block;
-  width: 100px;
-  text-align: center;
-  list-style: none;
-  color: #0175ff;
-}
-
-.is-dot {
-  display: inline-block;
-  border-radius: 50%;
-  overflow: hidden;
-  width: 6px;
-  height: 6px;
-  background-color: #f56b89;
 }
 </style>
