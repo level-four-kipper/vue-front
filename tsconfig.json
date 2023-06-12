@@ -1,0 +1,12 @@
+{
+  "include": [
+    "src/**/*.ts",
+    "src/**/*.d.ts",
+    "src/**/*.tsx",
+    "src/**/*.vue",
+    "./auto-imports.d.ts" // 引入到这里
+  ],
+  "compilerOptions": {
+    "allowJs": true
+  }
+}
